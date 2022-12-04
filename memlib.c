@@ -19,8 +19,11 @@ static char *mem_start_brk;  /* points to first byte of heap */
 static char *mem_brk;        /* points to last byte of heap */
 static char *mem_max_addr;   /* largest legal heap address */ 
 
-/* 
- * mem_init - initialize the memory system model
+/**
+ * @brief mem_init - initialize the memory system model
+ * @details mem_start_brk : 할당된 가상 메모리 @n mem_brk : 미할당 가상 메모리 @n mem_max_addr : 최대 힙 주소
+ * 
+ * @return void
  */
 void mem_init(void)
 {
@@ -51,21 +54,29 @@ void mem_reset_brk()
 }
 
 /* 
- * mem_sbrk - simple model of the sbrk function. Extends the heap 
- *    by incr bytes and returns the start address of the new area. In
- *    this model, the heap cannot be shrunk.
+
+ * 
+ */
+
+/**
+ * @brief mem_sbrk - simple model of the sbrk function. Extends the heap @n by incr bytes and returns the start address of the new area. @n In this model, the heap cannot be shrunk.
+ * @details 힙을 축소하라는 요청을 거부하는 것만 제외하고는 시스템의 sbrk 함수와 @n 동일한 의미뿐만 아니라 동일한 인터페이스를 갖는다.
+ * 
+ * @param int incr incr 바이트만큼 올린다.
+ * @return void* 성공 시 이전 brk, 실패 시 -1
  */
 void *mem_sbrk(int incr) 
 {
-    char *old_brk = mem_brk;
+    char *old_brk = mem_brk; // mem_brk 를 가져와서 작업
 
+    // [err] incr 가 음수인 경우, 최대 힙 크기를 넘는 경우
     if ( (incr < 0) || ((mem_brk + incr) > mem_max_addr)) {
-	errno = ENOMEM;
-	fprintf(stderr, "ERROR: mem_sbrk failed. Ran out of memory...\n");
-	return (void *)-1;
+        errno = ENOMEM;
+        fprintf(stderr, "ERROR: mem_sbrk failed. Ran out of memory...\n");
+        return (void *)-1;
     }
-    mem_brk += incr;
-    return (void *)old_brk;
+    mem_brk += incr; // mem_brk를 incr만큼 확장 시킨다.
+    return (void *)old_brk; // 이전 brk(*old_brk) 리턴
 }
 
 /*
