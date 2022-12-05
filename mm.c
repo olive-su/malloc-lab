@@ -24,11 +24,11 @@
  ********************************************************/
 team_t team = {
     /* Team name */
-    "ateam",
+    "RedTeam07",
     /* First member's full name */
-    "Harry Bovik",
+    "olive-su",
     /* First member's email address */
-    "bovik@cs.cmu.edu",
+    "1466su@gmail.com",
     /* Second member's full name (leave blank if none) */
     "",
     /* Second member's email address (leave blank if none) */
@@ -69,8 +69,10 @@ team_t team = {
 
 static void *extend_heap(size_t words);
 static void *coalesce(void *bp);
+static void *find_fit(size_t asize);
+static void place(void *bp, size_t asize);
 
-static char* heap_listp;  
+static char *heap_listp;  
 
 
 /******    메인 함수    ******/
@@ -87,8 +89,6 @@ static char* heap_listp;
 int mm_init(void)
 {
     heap_listp = mem_sbrk(4 * WSIZE); // 초기 상태를 저장하기 위한 사이즈 지정
-    // heap_listp = 0
-    // mem_brk = 4 * WSIZE
 
     if (heap_listp == (void *)-1) // 오류 (sbrk와 동일)
         return -1;
@@ -109,33 +109,65 @@ int mm_init(void)
 
 /**
  * @brief mm_malloc - Allocate a block by incrementing the brk pointer. @n   Always allocate a block whose size is a multiple of the alignment.
- * @details 
+ * @details 새 블록 할당
  * 
- * @param size_t size 
+ * @param size_t size 새로 할당하려는 블록의 바이트 수 
  * @return void* 
  */
 void *mm_malloc(size_t size)
 {
-    int newsize = ALIGN(size + SIZE_T_SIZE);
-    void *p = mem_sbrk(newsize);
-    if (p == (void *)-1)
-	return NULL;
-    else {
-        *(size_t *)p = size;
-        return (void *)((char *)p + SIZE_T_SIZE);
+    /* 기본형 */
+    
+    // int newsize = ALIGN(size + SIZE_T_SIZE);
+    // void *p = mem_sbrk(newsize);
+    // if (p == (void *)-1)
+	// return NULL;
+    // else {
+    //     *(size_t *)p = size;
+    //     return (void *)((char *)p + SIZE_T_SIZE);
+    // }
+
+    size_t asize;
+    size_t extendsize;
+    char *bp;
+
+    if (size == 0) // 사이즈 0 요청 처리
+        return NULL;
+
+    // 더블 워드 정렬 제한 조건을 만족 시키기위해 더블 워드 단위로 크기를 설정한다.    
+    if (size <= DSIZE) // 최소 크기인 16바이트(헤더, 푸터, 페이로드 포함)로 설정한다.
+        asize = 2 * DSIZE;
+    else // 8바이트를 넘는 요청 처리
+        asize = DSIZE * ((size + (DSIZE) + (DSIZE - 1)) / DSIZE);
+
+    // 조정한 크기(asize)에 대해 가용 리스트에서 적절한 가용 블록을 찾는다.
+    if ((bp = find_fit(asize)) != NULL) {
+        place(bp, asize); // 초과부분을 분할한다.
+        return bp; // 새롭게 할당한 블록을 리턴한다.
     }
+
+    // 적합한 fit 공간을 찾지 못했을 때 heap을 확장한다.
+    extendsize = MAX(asize, CHUNKSIZE);
+    if ((bp = extend_heap(extendsize/WSIZE)) == NULL)
+        return NULL;
+    place(bp, asize);
+    return bp;
 }
 
-/*
- * mm_free - Freeing a block does nothing.
+/**
+ * @brief mm_free - Freeing a block does nothing.
+ * @details 요청한 블록 반환
+ * 
+ * @param void* ptr 반환하려는 블록 포인터 
+ * @return void
  */
 void mm_free(void *ptr)
 {
-    size_t size = GET_SIZE(HDRP(ptr));
+    size_t size = GET_SIZE(HDRP(ptr)); // 반환하려는 블록의 사이즈
 
-    PUT(HDRP(ptr), PACK(size, 0));
-    PUT(FTRP(ptr), PACK(size, 0));
-    coalesce(ptr);
+    PUT(HDRP(ptr), PACK(size, 0)); // 헤더의 할당 비트를 0으로 설정한다.
+    PUT(FTRP(ptr), PACK(size, 0)); // 헤더의 할당 비트를 0으로 설정한다.
+    coalesce(ptr); // 인접 가용 블록들에 대한 연결을 수행한다.
 }
 
 /*
@@ -150,7 +182,8 @@ void *mm_realloc(void *ptr, size_t size)
     newptr = mm_malloc(size);
     if (newptr == NULL)
       return NULL;
-    copySize = *(size_t *)((char *)oldptr - SIZE_T_SIZE);
+    copySize = GET_SIZE(HDRP(oldptr));
+    // copySize = *(size_t *)((char *)oldptr - SIZE_T_SIZE);
     if (size < copySize)
       copySize = size;
     memcpy(newptr, oldptr, copySize);
@@ -187,7 +220,12 @@ static void *extend_heap(size_t words)
     return coalesce(bp); // 이전 힙이 가용 블록이라면 연결 수행
 }
 
-
+/**
+ * @brief 인접 가용 블록들을 연결한다.
+ * 
+ * @param void* bp 블록 포인터
+ * @return void* 통합된 블록 포인터
+ */
 static void *coalesce(void *bp)
 {
     size_t prev_alloc = GET_ALLOC(FTRP(PREV_BLKP(bp))); // 이전 블록 푸터에서 할당 여부 파악
@@ -214,7 +252,8 @@ static void *coalesce(void *bp)
     {
         size += GET_SIZE(HDRP(PREV_BLKP(bp)));
         PUT(FTRP(bp), PACK(size, 0));
-        PUT(FTRP(bp), PACK(size, 0));
+        PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0));
+        bp = PREV_BLKP(bp);
     }
     // [CASE 4] : pb - 가용 상태 / nb - 가용 상태
     // resize block size : pb + nb 
@@ -228,4 +267,47 @@ static void *coalesce(void *bp)
     return bp;
 }
 
+/**
+ * @brief first-fit 방식으로 가용 블록 탐색
+ * 
+ * @param size_t asize 새로 할당하려는 블록 바이트 수
+ * @return void* 
+ */
+static void *find_fit(size_t asize)
+{
+    void *bp;
+
+    // 에필로그 블록의 헤더를 0으로 넣어줬으므로 에필로그 블록을 만날 때까지 탐색을 진행한다.
+    for (bp = heap_listp; GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLKP(bp)) {
+        if (!GET_ALLOC(HDRP(bp)) && (asize <= GET_SIZE(HDRP(bp))))
+            return bp;
+    }
+
+    return NULL;
+}
+
+/**
+ * @brief 가용 블록 분할(할당 블록 / 가용 블록) 
+ * 
+ * @param void* bp 블록 포인터 
+ * @param size_t asize 새로 할당하려는 블록 바이트 수
+ * @return void
+ */
+static void place(void *bp, size_t asize)
+{
+    size_t csize = GET_SIZE(HDRP(bp)); // 가용 블록의 사이즈
+
+    if ((csize - asize) >= (2 * DSIZE)) {
+        // asize만큼의 할당 블록을 생성한다.
+        PUT(HDRP(bp), PACK(asize, 1));
+        PUT(FTRP(bp), PACK(asize, 1));
+        bp = NEXT_BLKP(bp);
+        // 새로운 할당 블록(전체 가용 블록 - 할당 블록)의 뒷 부분을 가용 블록으로 만든다.
+        PUT(HDRP(bp), PACK(csize - asize, 0));
+        PUT(FTRP(bp), PACK(csize - asize, 0));
+    } else {
+        PUT(HDRP(bp), PACK(csize, 1));
+        PUT(FTRP(bp), PACK(csize, 1));
+    }
+}
 
