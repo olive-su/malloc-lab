@@ -50,3 +50,11 @@
 >>>
 >>> Perf index = 46 (util) + 40 (thru) = 86/100
 ```
+
+<br>
+
+<br>
+
+|[<img src="https://user-images.githubusercontent.com/67156494/210132248-9240df67-183b-4f62-9a8d-3636537e83ed.png" width=120>](https://github.com/Krafton-Jungle-W06-Team07/Team07-malloc-lab)
+|-----|
+| [Week06 Team 7 Repository](https://github.com/Krafton-Jungle-W06-Team07/Team07-malloc-lab) |
